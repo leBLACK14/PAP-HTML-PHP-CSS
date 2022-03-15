@@ -1,0 +1,176 @@
+<?php
+
+//SIGNUP
+session_start();
+unset($_SESSION['user']);
+
+//--------------------------------------------------------------------
+//CABEÇALHO
+include 'cabecalho.php';
+
+//verificar se foram inseridos dados de utilizador
+if(!isset($_POST['btn_submit']))
+{
+ApresentarFormulario();
+}
+else
+{
+RegistarUtilizador();
+}
+
+//--------------------------------------------------------------------
+//RODAPE
+include 'rodape.php';
+
+//--------------------------------------------------------------------
+//FUNÇÕES
+//--------------------------------------------------------------------
+function ApresentarFormulario()
+{
+//apresenta o formulário para adição de novo utilizador
+echo '
+<form class="form_signup" method="post" action="signup.php?a=signup"
+
+enctype="multipart/form-data">
+<h3>Signup</h3><hr><br>
+Username:<br><input type="text" size="20"
+
+name="text_utilizador"><br><br>
+
+Password:<br><input type="password" size="20"
+
+name="text_password_1"><br><br>
+
+Re-escrever password:<br><input type="password" size="20"
+
+name="text_password_2"><br><br>
+
+<input type="hidden" name="MAX_FILE_SIZE" value="50000">
+Avatar:<input type="file" name="imagem_avatar"><br>
+<small>(Imagem do tipo <strong>JPG</strong>, tamanho máximo:
+
+<strong>50Kb</strong>)</small><br><br>
+
+<input type="submit" name="btn_submit" value="Registar"><br><br>
+<a href="index.php">Voltar</a>
+</form>';
+}
+
+//--------------------------------------------------------------------
+function RegistarUtilizador()
+{
+//executar as operações necessárias para o registo de um novo utilizador
+$utilizador = $_POST['text_utilizador'];
+$password_1 = $_POST['text_password_1'];
+$password_2 = $_POST['text_password_2'];
+//avatar
+$avatar = $_FILES['imagem_avatar'];
+$erro = false;
+
+//--------------------------------------------------------------------
+//verificação de erros do utilizador
+if($utilizador == "" || $password_1 == "" || $password_2 == "")
+{
+//ERRO - Não foram preenchido os campos necessários
+echo '<div class="erro">Não foram preenchido os campos
+
+necessários.</div>';
+$erro = true;
+}
+
+else if($password_1 != $password_2)
+{
+//ERRO - passwords não coincidem
+echo '<div class="erro">As passwords não coincidem.</div>';
+$erro = true;
+}//--------------------------------------------------------------------
+//erros do Avatar
+else if($avatar['name'] != "" && $avatar['type'] != "image/jpeg")
+{
+//ERRO - Ficheiro de imagem inválido
+echo '<div class="erro">Ficheiro de imagem inválido</div>';
+$erro = true;
+}
+else if($avatar['name'] != "" && $avatar['size'] > $_POST['MAX_FILE_SIZE'])
+{
+//ERRO - Ficheiro de imagem maior de que o permitido
+echo '<div class="erro">Ficheiro de imagem maior de que o
+
+permitido</div>';
+$erro = true;
+}
+
+//verificar se existitam erros
+if($erro)
+{
+ApresentarFormulario();
+//incluir o rodape
+include 'rodape.php';
+exit;
+}
+
+//--------------------------------------------------------------------
+//PROCESSAMENTO DO REGISTO DO NOVO UTILIZADOR
+//--------------------------------------------------------------------
+include 'config.php';
+$ligacao = new PDO("mysql:dbname=$base_dados;host=$host", $user, $password);
+
+//--------------------------------------------------------------------
+//verificar se já existe um utilizador com o mesmo username
+$motor = $ligacao->prepare("SELECT username FROM users WHERE username = ?");
+$motor->bindParam(1, $utilizador, PDO::PARAM_STR);
+$motor->execute();
+
+if($motor->rowCount() != 0)
+{
+//ERRO - utilizador já se encontra registado.
+echo '<div class="erro">Já existe um membro do forum com o mesmo
+
+username.</div>';
+$ligacao = null;
+ApresentarFormulario();
+//incluir o rodape do forum
+include 'rodape.php';
+exit;
+}
+else
+{
+//registo do novo utilizador
+$motor = $ligacao->prepare("SELECT MAX(id_user) AS MaxID FROM users");
+$motor->execute();
+$id_temp = $motor->fetch(PDO::FETCH_ASSOC)['MaxID'];
+if($id_temp == null)
+$id_temp = 0;
+else
+$id_temp++;
+
+//encriptar a password
+$passwordEncriptada = md5($password_1);
+
+$sql = "INSERT INTO users VALUES(:id_user, :user, :pass, :avatar)";
+$motor = $ligacao->prepare($sql);
+$motor->bindParam(":id_user", $id_temp, PDO::PARAM_INT);
+
+$motor->bindParam(":user", $utilizador, PDO::PARAM_STR);
+$motor->bindParam(":pass", $passwordEncriptada, PDO::PARAM_STR);
+$motor->bindParam(":avatar", $avatar['name'], PDO::PARAM_STR);
+$motor->execute();
+$ligacao = null;
+
+//upload do ficheiro de imagem do avatar para o servidor web
+move_uploaded_file($avatar['tmp_name'], "image/avatar/".$avatar['name']);
+
+//apresentar uma mensagem de boas vindas ao novo utilizador
+echo '
+<div class="novo_registo_sucesso">Bem-vindo ao Forum, <strong>'.
+
+$utilizador.'</strong><br><br>
+
+A partir deste momento está em condições de fazer o seu login e
+
+participar nesta comunidade online<br><br>
+<a href="index.php">Quandro de login</a></div>
+';
+}
+}
+?>
